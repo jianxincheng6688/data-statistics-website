@@ -20,6 +20,11 @@ export async function GET() {
     )
     console.log("查询到的表:", tables)
 
+    if (!Array.isArray(tables) || tables.length === 0) {
+      console.log("未找到任何表")
+      return NextResponse.json([])
+    }
+
     const tablesInfo = await Promise.all(
       (tables as any[]).map(async ({ name }) => {
         console.log(`正在获取表 ${name} 的记录数`)

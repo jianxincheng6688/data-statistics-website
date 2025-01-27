@@ -26,16 +26,19 @@ export default function TablesListPage() {
 
   const fetchTables = async () => {
     try {
+      setLoading(true)
+      setError(null)
       const response = await fetch("/api/tables")
       if (!response.ok) {
-        throw new Error("获取表格列表失败")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "获取表格列表失败")
       }
       const data = await response.json()
       setTables(data)
-      setLoading(false)
     } catch (error) {
       console.error("获取表格列表时出错:", error)
-      setError("获取表格列表失败，请稍后重试")
+      setError((error as Error).message || "获取表格列表失败，请稍后重试")
+    } finally {
       setLoading(false)
     }
   }
@@ -55,7 +58,14 @@ export default function TablesListPage() {
   }
 
   if (error) {
-    return <div className="text-center text-red-500">{error}</div>
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center text-red-500">{error}</div>
+        <Button onClick={fetchTables} className="mt-4">
+          重试
+        </Button>
+      </div>
+    )
   }
 
   return (
@@ -88,24 +98,28 @@ export default function TablesListPage() {
           </Button>
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredTables.map((table) => (
-          <Card key={table.name}>
-            <CardHeader>
-              <CardTitle>{table.name}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600">{table.description}</p>
-              <p className="mt-2 text-sm">记录数量: {table.recordCount}</p>
-            </CardContent>
-            <CardFooter>
-              <Link href={`/tables/${table.name}`}>
-                <Button>查看详情</Button>
-              </Link>
-            </CardFooter>
-          </Card>
-        ))}
-      </div>
+      {filteredTables.length === 0 ? (
+        <div className="text-center">没有找到匹配的数据表</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredTables.map((table) => (
+            <Card key={table.name}>
+              <CardHeader>
+                <CardTitle>{table.name}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">{table.description}</p>
+                <p className="mt-2 text-sm">记录数量: {table.recordCount}</p>
+              </CardContent>
+              <CardFooter>
+                <Link href={`/tables/${table.name}`}>
+                  <Button>查看详情</Button>
+                </Link>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
