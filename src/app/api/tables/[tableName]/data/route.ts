@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { pool } from "@/lib/db"
+import { getPool } from "@/lib/db"
 
 export async function GET(request: NextRequest, { params }: { params: { tableName: string } }) {
   const { tableName } = params
@@ -35,6 +35,12 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
   // 添加分页
   query += ` LIMIT ? OFFSET ?`
   queryParams.push(pageSize, offset)
+
+  const pool = getPool()
+
+  if (!pool) {
+    return NextResponse.json({ error: "数据库连接失败" }, { status: 500 })
+  }
 
   try {
     const [columns] = await pool.query(`SHOW COLUMNS FROM \`${tableName}\``)
