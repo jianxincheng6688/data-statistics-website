@@ -1,47 +1,63 @@
-import { pool } from "./db"
-import bcrypt from "bcryptjs"
+import { getPool } from "./db"
+import bcrypt from "bcrypt"
 
 export interface User {
   id: number
   username: string
   password: string
-  role: "admin" | "user"
+  // 添加其他用户属性
 }
 
 export async function authenticateUser(username: string, password: string): Promise<User | null> {
+  const pool = getPool()
+  if (!pool) {
+    console.error("数据库连接失败")
+    return null
+  }
+
   try {
     const [rows] = (await pool.query("SELECT * FROM users WHERE username = ?", [username])) as [User[], any]
     const user = rows[0]
 
     if (user) {
-      // 对于测试目的，我们暂时禁用密码哈希比较
-      // const isMatch = await bcrypt.compare(password, user.password);
-      const isMatch = password === user.password // 直接比较明文密码
-
-      if (isMatch) {
+      const isPasswordValid = await bcrypt.compare(password, user.password)
+      if (isPasswordValid) {
         return user
       }
     }
 
     return null
   } catch (error) {
-    console.error("Authentication error:", error)
+    console.error("认证用户时出错:", error)
     return null
   }
 }
 
-export async function createUser(username: string, password: string, role: "admin" | "user"): Promise<User | null> {
+export async function createUser(username: string, password: string): Promise<User | null> {
+  const pool = getPool()
+  if (!pool) {
+    console.error("数据库连接失败")
+    return null
+  }
+
   try {
     const hashedPassword = await bcrypt.hash(password, 10)
-    const [result] = (await pool.query("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", [
+    const [result] = (await pool.query("INSERT INTO users (username, password) VALUES (?, ?)", [
       username,
       hashedPassword,
-      role,
     ])) as [any, any]
-    const insertId = result.insertId
-    return { id: insertId, username, password: hashedPassword, role }
+
+    if (result.insertId) {
+      return {
+        id: result.insertId,
+        username,
+        password: hashedPassword,
+      }
+    }
+
+    return null
   } catch (error) {
-    console.error("User creation error:", error)
+    console.error("创建用户时出错:", error)
     return null
   }
 }

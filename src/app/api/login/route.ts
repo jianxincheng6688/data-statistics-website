@@ -1,19 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { getPool } from "@/lib/db"
+import { authenticateUser } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
   const { username, password } = await request.json()
-  const pool = getPool()
-
-  if (!pool) {
-    return NextResponse.json({ error: "数据库连接失败" }, { status: 500 })
-  }
 
   try {
-    const [rows] = await pool.query("SELECT * FROM users WHERE username = ? AND password = ?", [username, password])
+    const user = await authenticateUser(username, password)
 
-    if (Array.isArray(rows) && rows.length > 0) {
+    if (user) {
       cookies().set("admin_session", "true", {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
