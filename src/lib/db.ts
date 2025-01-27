@@ -2,7 +2,7 @@ import mysql from "mysql2/promise"
 
 let pool: mysql.Pool | null = null
 
-export function getPool() {
+export function getPool(): mysql.Pool | null {
   if (!pool && process.env.NODE_ENV !== "production") {
     pool = mysql.createPool({
       host: process.env.DB_HOST,
@@ -21,9 +21,10 @@ export function getPool() {
 }
 
 export async function getTableColumns(tableName: string): Promise<string[]> {
-  if (!getPool()) return []
+  const pool = getPool()
+  if (!pool) return []
   try {
-    const [columns] = await getPool()!.query(`SHOW COLUMNS FROM \`${tableName}\``)
+    const [columns] = await pool.query(`SHOW COLUMNS FROM \`${tableName}\``)
     return (columns as any[]).map((col: any) => col.Field)
   } catch (error) {
     console.error(`获取表 ${tableName} 的列时出错:`, error)
@@ -32,7 +33,8 @@ export async function getTableColumns(tableName: string): Promise<string[]> {
 }
 
 export async function getTableData(tableName: string, page = 1, pageSize = 20, searchFields?: Record<string, string>) {
-  if (!getPool()) return { columns: [], rows: [], total: 0 }
+  const pool = getPool()
+  if (!pool) return { columns: [], rows: [], total: 0 }
   try {
     const columns = await getTableColumns(tableName)
     const offset = (page - 1) * pageSize
@@ -58,8 +60,8 @@ export async function getTableData(tableName: string, page = 1, pageSize = 20, s
     query += ` LIMIT ? OFFSET ?`
     queryParams.push(pageSize, offset)
 
-    const [rows] = await getPool()!.query(query, queryParams)
-    const [totalResult] = await getPool()!.query(`SELECT COUNT(*) as total FROM \`${tableName}\``)
+    const [rows] = await pool.query(query, queryParams)
+    const [totalResult] = await pool.query(`SELECT COUNT(*) as total FROM \`${tableName}\``)
     const total = Number((totalResult as any[])[0].total)
 
     return { columns, rows: rows as any[], total }
@@ -70,7 +72,8 @@ export async function getTableData(tableName: string, page = 1, pageSize = 20, s
 }
 
 export async function insertRecord(tableName: string, data: Record<string, any>) {
-  if (!getPool()) return null
+  const pool = getPool()
+  if (!pool) return null
   try {
     const columns = Object.keys(data).join(", ")
     const placeholders = Object.keys(data)
@@ -78,10 +81,7 @@ export async function insertRecord(tableName: string, data: Record<string, any>)
       .join(", ")
     const values = Object.values(data)
 
-    const [result] = await getPool()!.query(
-      `INSERT INTO \`${tableName}\` (${columns}) VALUES (${placeholders})`,
-      values,
-    )
+    const [result] = await pool.query(`INSERT INTO \`${tableName}\` (${columns}) VALUES (${placeholders})`, values)
     return result
   } catch (error) {
     console.error(`向表 ${tableName} 插入记录时出错:`, error)
@@ -90,14 +90,15 @@ export async function insertRecord(tableName: string, data: Record<string, any>)
 }
 
 export async function updateRecord(tableName: string, id: number, data: Record<string, any>) {
-  if (!getPool()) return null
+  const pool = getPool()
+  if (!pool) return null
   try {
     const setClause = Object.keys(data)
       .map((key) => `${key} = ?`)
       .join(", ")
     const values = [...Object.values(data), id]
 
-    const [result] = await getPool()!.query(`UPDATE \`${tableName}\` SET ${setClause} WHERE id = ?`, values)
+    const [result] = await pool.query(`UPDATE \`${tableName}\` SET ${setClause} WHERE id = ?`, values)
     return result
   } catch (error) {
     console.error(`更新表 ${tableName} 中的记录时出错:`, error)
@@ -106,9 +107,10 @@ export async function updateRecord(tableName: string, id: number, data: Record<s
 }
 
 export async function deleteRecord(tableName: string, id: number) {
-  if (!getPool()) return null
+  const pool = getPool()
+  if (!pool) return null
   try {
-    const [result] = await getPool()!.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [id])
+    const [result] = await pool.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [id])
     return result
   } catch (error) {
     console.error(`从表 ${tableName} 删除记录时出错:`, error)
@@ -117,9 +119,10 @@ export async function deleteRecord(tableName: string, id: number) {
 }
 
 export async function getTableRecordCount(tableName: string): Promise<number> {
-  if (!getPool()) return 0
+  const pool = getPool()
+  if (!pool) return 0
   try {
-    const [result] = await getPool()!.query(`SELECT COUNT(*) as count FROM \`${tableName}\``)
+    const [result] = await pool.query(`SELECT COUNT(*) as count FROM \`${tableName}\``)
     return (result as any[])[0].count
   } catch (error) {
     console.error(`获取表 ${tableName} 的记录数时出错:`, error)
@@ -128,9 +131,10 @@ export async function getTableRecordCount(tableName: string): Promise<number> {
 }
 
 export async function getTables(): Promise<string[]> {
-  if (!getPool()) return []
+  const pool = getPool()
+  if (!pool) return []
   try {
-    const [tables] = await getPool()!.query(`SHOW TABLES`)
+    const [tables] = await pool.query(`SHOW TABLES`)
     return (tables as any[]).map((table) => Object.values(table)[0] as string)
   } catch (error) {
     console.error("获取表列表时出错:", error)
@@ -139,9 +143,10 @@ export async function getTables(): Promise<string[]> {
 }
 
 export async function getTablesExcludingUsers(): Promise<string[]> {
-  if (!getPool()) return []
+  const pool = getPool()
+  if (!pool) return []
   try {
-    const [tables] = await getPool()!.query(
+    const [tables] = await pool.query(
       `
       SELECT TABLE_NAME 
       FROM information_schema.TABLES 
@@ -166,7 +171,8 @@ interface TableStats {
 }
 
 export async function getTableStats(tableName?: string): Promise<TableStats | TableStats[]> {
-  if (!getPool()) return []
+  const pool = getPool()
+  if (!pool) return []
   try {
     let query = `
       SELECT 
@@ -188,7 +194,7 @@ export async function getTableStats(tableName?: string): Promise<TableStats | Ta
       queryParams.push(tableName)
     }
 
-    const [result] = await getPool()!.query(query, queryParams)
+    const [result] = await pool.query(query, queryParams)
 
     return tableName ? (result as TableStats[])[0] : (result as TableStats[])
   } catch (error) {
