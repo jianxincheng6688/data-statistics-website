@@ -1,26 +1,38 @@
 import mysql from "mysql2/promise"
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-})
+let pool: mysql.Pool | null = null
+
+export function getPool() {
+  if (!pool && process.env.NODE_ENV !== "production") {
+    pool = mysql.createPool({
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      ssl: {
+        rejectUnauthorized: true,
+      },
+    })
+  }
+  return pool
+}
 
 export async function getTableColumns(tableName: string): Promise<string[]> {
+  if (!getPool()) return []
   try {
-    const [columns] = await pool.query(`SHOW COLUMNS FROM \`${tableName}\``)
+    const [columns] = await getPool()!.query(`SHOW COLUMNS FROM \`${tableName}\``)
     return (columns as any[]).map((col: any) => col.Field)
   } catch (error) {
-    console.error(`Error fetching columns for table ${tableName}:`, error)
-    throw new Error(`Table '${tableName}' doesn't exist or cannot be accessed`)
+    console.error(`获取表 ${tableName} 的列时出错:`, error)
+    return []
   }
 }
 
 export async function getTableData(tableName: string, page = 1, pageSize = 20, searchFields?: Record<string, string>) {
+  if (!getPool()) return { columns: [], rows: [], total: 0 }
   try {
     const columns = await getTableColumns(tableName)
     const offset = (page - 1) * pageSize
@@ -46,18 +58,19 @@ export async function getTableData(tableName: string, page = 1, pageSize = 20, s
     query += ` LIMIT ? OFFSET ?`
     queryParams.push(pageSize, offset)
 
-    const [rows] = await pool.query(query, queryParams)
-    const [totalResult] = await pool.query(`SELECT COUNT(*) as total FROM \`${tableName}\``)
+    const [rows] = await getPool()!.query(query, queryParams)
+    const [totalResult] = await getPool()!.query(`SELECT COUNT(*) as total FROM \`${tableName}\``)
     const total = Number((totalResult as any[])[0].total)
 
     return { columns, rows: rows as any[], total }
   } catch (error) {
-    console.error(`Error fetching data for table ${tableName}:`, error)
-    throw error
+    console.error(`获取表 ${tableName} 的数据时出错:`, error)
+    return { columns: [], rows: [], total: 0 }
   }
 }
 
 export async function insertRecord(tableName: string, data: Record<string, any>) {
+  if (!getPool()) return null
   try {
     const columns = Object.keys(data).join(", ")
     const placeholders = Object.keys(data)
@@ -65,62 +78,70 @@ export async function insertRecord(tableName: string, data: Record<string, any>)
       .join(", ")
     const values = Object.values(data)
 
-    const [result] = await pool.query(`INSERT INTO \`${tableName}\` (${columns}) VALUES (${placeholders})`, values)
+    const [result] = await getPool()!.query(
+      `INSERT INTO \`${tableName}\` (${columns}) VALUES (${placeholders})`,
+      values,
+    )
     return result
   } catch (error) {
-    console.error(`Error inserting record into table ${tableName}:`, error)
+    console.error(`向表 ${tableName} 插入记录时出错:`, error)
     throw error
   }
 }
 
 export async function updateRecord(tableName: string, id: number, data: Record<string, any>) {
+  if (!getPool()) return null
   try {
     const setClause = Object.keys(data)
       .map((key) => `${key} = ?`)
       .join(", ")
     const values = [...Object.values(data), id]
 
-    const [result] = await pool.query(`UPDATE \`${tableName}\` SET ${setClause} WHERE id = ?`, values)
+    const [result] = await getPool()!.query(`UPDATE \`${tableName}\` SET ${setClause} WHERE id = ?`, values)
     return result
   } catch (error) {
-    console.error(`Error updating record in table ${tableName}:`, error)
+    console.error(`更新表 ${tableName} 中的记录时出错:`, error)
     throw error
   }
 }
 
 export async function deleteRecord(tableName: string, id: number) {
+  if (!getPool()) return null
   try {
-    const [result] = await pool.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [id])
+    const [result] = await getPool()!.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [id])
     return result
   } catch (error) {
-    console.error(`Error deleting record from table ${tableName}:`, error)
+    console.error(`从表 ${tableName} 删除记录时出错:`, error)
     throw error
   }
 }
 
 export async function getTableRecordCount(tableName: string): Promise<number> {
+  if (!getPool()) return 0
   try {
-    const [result] = await pool.query(`SELECT COUNT(*) as count FROM \`${tableName}\``)
+    const [result] = await getPool()!.query(`SELECT COUNT(*) as count FROM \`${tableName}\``)
     return (result as any[])[0].count
   } catch (error) {
-    console.error(`Error getting record count for table ${tableName}:`, error)
+    console.error(`获取表 ${tableName} 的记录数时出错:`, error)
     throw error
   }
 }
 
 export async function getTables(): Promise<string[]> {
+  if (!getPool()) return []
   try {
-    const [tables] = await pool.query(`SHOW TABLES`)
+    const [tables] = await getPool()!.query(`SHOW TABLES`)
     return (tables as any[]).map((table) => Object.values(table)[0] as string)
   } catch (error) {
-    console.error("Error fetching tables:", error)
+    console.error("获取表列表时出错:", error)
     throw error
   }
 }
 
 export async function getTablesExcludingUsers(): Promise<string[]> {
+  if (!getPool()) return []
   try {
-    const [tables] = await pool.query(
+    const [tables] = await getPool()!.query(
       `
       SELECT TABLE_NAME 
       FROM information_schema.TABLES 
@@ -130,8 +151,8 @@ export async function getTablesExcludingUsers(): Promise<string[]> {
     )
     return (tables as any[]).map((table) => table.TABLE_NAME as string)
   } catch (error) {
-    console.error("Error fetching tables:", error)
-    throw error
+    console.error("获取表列表（不包括users表）时出错:", error)
+    return []
   }
 }
 
@@ -145,6 +166,7 @@ interface TableStats {
 }
 
 export async function getTableStats(tableName?: string): Promise<TableStats | TableStats[]> {
+  if (!getPool()) return []
   try {
     let query = `
       SELECT 
@@ -166,11 +188,11 @@ export async function getTableStats(tableName?: string): Promise<TableStats | Ta
       queryParams.push(tableName)
     }
 
-    const [result] = await pool.query(query, queryParams)
+    const [result] = await getPool()!.query(query, queryParams)
 
     return tableName ? (result as TableStats[])[0] : (result as TableStats[])
   } catch (error) {
-    console.error(`Error fetching stats for table${tableName ? ` ${tableName}` : "s"}:`, error)
+    console.error(`获取表${tableName ? ` ${tableName}` : "s"}的统计信息时出错:`, error)
     throw error
   }
 }

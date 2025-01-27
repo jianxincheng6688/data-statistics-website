@@ -1,19 +1,23 @@
-import { getTables } from "@/lib/db"
-import Link from "next/link"
+import { getTablesExcludingUsers } from "@/lib/db"
 
 export default async function DashboardPage() {
-  const tables = await getTables()
+  let tables = []
+  if (process.env.NODE_ENV !== "production") {
+    tables = await getTablesExcludingUsers()
+  }
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">管理仪表板</h1>
-      <ul>
-        {(tables as any[]).map((table: any) => (
-          <li key={table.TABLE_NAME}>
-            <Link href={`/tables/${encodeURIComponent(table.TABLE_NAME)}/manage`}>{table.TABLE_NAME}</Link>
-          </li>
-        ))}
-      </ul>
+    <div>
+      <h1>仪表板</h1>
+      {tables.length > 0 ? (
+        <ul>
+          {tables.map((table) => (
+            <li key={table}>{table}</li>
+          ))}
+        </ul>
+      ) : (
+        <p>没有可用的表格或正在生产构建中。</p>
+      )}
     </div>
   )
 }
