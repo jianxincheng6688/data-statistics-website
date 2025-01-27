@@ -3,19 +3,29 @@ import mysql from "mysql2/promise"
 let pool: mysql.Pool | null = null
 
 export function getPool(): mysql.Pool | null {
-  if (!pool && process.env.NODE_ENV !== "production") {
-    pool = mysql.createPool({
-      host: process.env.DB_HOST,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0,
-      ssl: {
-        rejectUnauthorized: true,
-      },
-    })
+  if (!pool) {
+    console.log("创建新的数据库连接池")
+    try {
+      pool = mysql.createPool({
+        host: process.env.DB_HOST,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        ssl:
+          process.env.NODE_ENV === "production"
+            ? {
+                rejectUnauthorized: true,
+              }
+            : undefined,
+      })
+      console.log("数据库连接池创建成功")
+    } catch (error) {
+      console.error("创建数据库连接池失败:", error)
+      return null
+    }
   }
   return pool
 }
