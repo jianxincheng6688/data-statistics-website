@@ -1,7 +1,7 @@
 import { getTablesExcludingUsers } from "@/lib/db"
 
 export default async function AllDataPage() {
-  let tables = []
+  let tables: string[] = []
   if (process.env.NODE_ENV !== "production") {
     tables = await getTablesExcludingUsers()
   }

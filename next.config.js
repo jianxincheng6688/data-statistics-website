@@ -1,9 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  experimental: {
-    appDir: true,
-  },
   env: {
     DB_HOST: process.env.DB_HOST,
     DB_USER: process.env.DB_USER,
