@@ -1,13 +1,11 @@
 "use client"
 
-import { useState, Suspense } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card"
-import { ErrorBoundary } from "react-error-boundary"
 import { Spinner } from "@/components/ui/spinner"
-import useSWR from "swr"
 
 interface TableInfo {
   name: string
@@ -15,16 +13,32 @@ interface TableInfo {
   recordCount: number
 }
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
-
-function TablesList() {
+export default function TablesListPage() {
+  const [tables, setTables] = useState<TableInfo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState<"name" | "recordCount">("name")
 
-  const { data: tables = [], error } = useSWR<TableInfo[]>("/api/tables", fetcher)
+  useEffect(() => {
+    fetchTables()
+  }, [])
 
-  if (error) return <div>加载失败，请稍后重试</div>
-  if (!tables) return <Spinner />
+  const fetchTables = async () => {
+    try {
+      const response = await fetch("/api/tables")
+      if (!response.ok) {
+        throw new Error("获取表格列表失败")
+      }
+      const data = await response.json()
+      setTables(data)
+      setLoading(false)
+    } catch (error) {
+      console.error("获取表格列表时出错:", error)
+      setError("获取表格列表失败，请稍后重试")
+      setLoading(false)
+    }
+  }
 
   const filteredTables = tables
     .filter((table) => table.name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -36,8 +50,22 @@ function TablesList() {
       }
     })
 
+  if (loading) {
+    return <Spinner />
+  }
+
+  if (error) {
+    return <div className="text-center text-red-500">{error}</div>
+  }
+
   return (
-    <>
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-4">
+        <Link href="/">
+          <Button variant="outline">返回首页</Button>
+        </Link>
+      </div>
+      <h1 className="text-2xl font-bold mb-6">数据表列表</h1>
       <div className="mb-6 flex justify-between items-center">
         <Input
           type="text"
@@ -60,7 +88,6 @@ function TablesList() {
           </Button>
         </div>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredTables.map((table) => (
           <Card key={table.name}>
@@ -79,24 +106,6 @@ function TablesList() {
           </Card>
         ))}
       </div>
-    </>
-  )
-}
-
-export default function TablesListPage() {
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-4">
-        <Link href="/">
-          <Button variant="outline">返回首页</Button>
-        </Link>
-      </div>
-      <h1 className="text-2xl font-bold mb-6">数据表列表</h1>
-      <ErrorBoundary fallback={<div>加载失败，请稍后重试</div>}>
-        <Suspense fallback={<Spinner />}>
-          <TablesList />
-        </Suspense>
-      </ErrorBoundary>
     </div>
   )
 }
